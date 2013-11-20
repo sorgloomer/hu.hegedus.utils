@@ -16,7 +16,7 @@ public class Beans {
 		beansBean.copyProperties(src, dst);
 	}
 
-	public static void flushCache() {
+	public static void flushCaches() {
 		beansBean = new BeansBean();
 	}
 }

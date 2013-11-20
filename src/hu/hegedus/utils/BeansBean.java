@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * This class does and caches proeprty copying operations.
+ * This class does and caches property copying operations.
  * 
  * @author Hege
  * 
@@ -34,6 +34,8 @@ public class BeansBean {
 	 */
 	@SuppressWarnings("unchecked")
 	public <T> T clone(T src) {
+		if (src == null)
+			return null;
 		return this.convert(src, (Class<T>) src.getClass());
 	}
 
@@ -52,7 +54,7 @@ public class BeansBean {
 		Class<?> classSrc = src.getClass();
 		try {
 			T res = classDst.newInstance();
-			this.copyProperties(src.getClass(), classDst, src, res);
+			this.copyProperties(src, res);
 			return res;
 		} catch (InstantiationException | IllegalAccessException e) {
 			throw new RuntimeException("Could not convert object of class '"
@@ -62,20 +64,18 @@ public class BeansBean {
 	}
 
 	/**
-	 * Copies the property values whose name matches from src to dst.
+	 * Copies the matching properties from src to dst.
 	 * 
+	 * @param classSrc
+	 * @param classDst
 	 * @param src
 	 * @param dst
 	 */
-	public void copyProperties(Object src, Object dst) {
-		this.copyProperties(src.getClass(), dst.getClass(), src, dst);
-	}
-
-	protected void copyProperties(Class<?> classSrc, Class<?> classDst,
-			Object src, Object dst) {
+	protected void copyProperties(Object src, Object dst) {
+		Class<?> classSrc = src.getClass();
+		Class<?> classDst = dst.getClass();
+		Map<Pair<Class<?>, Class<?>>, Pair<Method, Method>[]> cache = this.cache;
 		try {
-			Map<Pair<Class<?>, Class<?>>, Pair<Method, Method>[]> cache = this.cache;
-
 			Pair<Class<?>, Class<?>> classes =
 					new Pair<Class<?>, Class<?>>(classSrc, classDst);
 			Pair<Method, Method>[] methodPairs = cache
@@ -85,8 +85,8 @@ public class BeansBean {
 					methodPairs = cache.get(classes);
 					if (methodPairs == null) {
 						methodPairs = this.generatePropertyPairs(
-								classes.getFirst(),
-								classes.getSecond());
+								classSrc,
+								classDst);
 						cache.put(classes, methodPairs);
 					}
 				}
@@ -105,6 +105,18 @@ public class BeansBean {
 		}
 	}
 
+	/**
+	 * Generates the getter-setter pairs for the matching properties of classes
+	 * src and dst. For every writeable property of class dst, a readable
+	 * porperty in the class src is searched for, and returned as a Method pair.
+	 * If no suitable getter is found in src, than no pair is returned for the
+	 * proeprty in dst.
+	 * 
+	 * @param src
+	 * @param dst
+	 * @return
+	 * @throws IntrospectionException
+	 */
 	protected Pair<Method, Method>[] generatePropertyPairs(
 			Class<?> src, Class<?> dst) throws IntrospectionException {
 		BeanInfo srcInfo = Introspector.getBeanInfo(src);
@@ -112,20 +124,24 @@ public class BeansBean {
 		PropertyDescriptor[] srcDescs = srcInfo.getPropertyDescriptors();
 		PropertyDescriptor[] dstDescs = dstInfo.getPropertyDescriptors();
 		List<Pair<Method, Method>> result = new ArrayList<>();
-		for (PropertyDescriptor srcDesc : srcDescs) {
-			Method srcRead = srcDesc.getReadMethod();
-			if (srcRead != null) {
-				String srcName = srcDesc.getDisplayName();
-				Class<?> srcType = Primitives.getWrappedType(srcDesc
-						.getPropertyType());
-				for (PropertyDescriptor dstDesc : dstDescs) {
-					Method dstWrite = dstDesc.getWriteMethod();
-					Class<?> dstType = Primitives.getWrappedType(dstDesc
-							.getPropertyType());
-					if (dstWrite != null
-							&& srcName.equals(dstDesc.getDisplayName())
-							&& dstType.isAssignableFrom(srcType)) {
-						result.add(new Pair<>(srcRead, dstWrite));
+		for (PropertyDescriptor dstDesc : dstDescs) {
+			Method dstWrite = dstDesc.getWriteMethod();
+			if (dstWrite != null) {
+				for (PropertyDescriptor srcDesc : srcDescs) {
+					Method srcRead = srcDesc.getReadMethod();
+					if (srcRead != null) {
+						String srcName = srcDesc.getDisplayName();
+						String dstName = dstDesc.getDisplayName();
+						Class<?> srcType = Primitives.getWrappedType(srcDesc
+								.getPropertyType());
+						Class<?> dstType = Primitives.getWrappedType(dstDesc
+								.getPropertyType());
+						if (srcName.equals(dstName)
+								&& dstType.isAssignableFrom(srcType)) {
+							result.add(new Pair<>(srcRead, dstWrite));
+							// Write a property at most once.
+							break;
+						}
 					}
 				}
 			}
