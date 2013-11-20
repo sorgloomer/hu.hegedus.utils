@@ -11,15 +11,41 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * This class does and caches proeprty copying operations.
+ * 
+ * @author Hege
+ * 
+ */
 public class BeansBean {
 
+	/**
+	 * This map holds the cached getter and setter method pairs for every
+	 * matching properties in a given source-destination class pair.
+	 */
 	private Map<Pair<Class<?>, Class<?>>, Pair<Method, Method>[]> cache = new ConcurrentHashMap<>();
 
+	/**
+	 * Creates a new instance of the type of src, and copies it's properties
+	 * into the new instance via the getters and setters.
+	 * 
+	 * @param src
+	 * @return
+	 */
 	@SuppressWarnings("unchecked")
 	public <T> T clone(T src) {
 		return this.convert(src, (Class<T>) src.getClass());
 	}
 
+	/**
+	 * Converts the object src to the given type. This function first creates a
+	 * new instance of type classDst, and then copies the matching properties
+	 * from src.
+	 * 
+	 * @param src
+	 * @param classDst
+	 * @return
+	 */
 	public <T> T convert(Object src, Class<T> classDst) {
 		if (src == null)
 			return null;
@@ -35,6 +61,12 @@ public class BeansBean {
 		}
 	}
 
+	/**
+	 * Copies the property values whose name matches from src to dst.
+	 * 
+	 * @param src
+	 * @param dst
+	 */
 	public void copyProperties(Object src, Object dst) {
 		this.copyProperties(src.getClass(), dst.getClass(), src, dst);
 	}
